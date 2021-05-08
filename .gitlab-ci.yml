@@ -1,0 +1,61 @@
+image: php:7.4
+
+variables:
+  MYSQL_ROOT_PASSWORD: $MYSQL_ROOT_PASSWORD
+  MYSQL_USER: $MYSQL_USER
+  MYSQL_PASSWORD: $MYSQL_PASSWORD
+  MYSQL_DATABASE: $MYSQL_DATABASE
+  DB_HOST: $DB_HOST
+  DATABASE_URL: $DATABASE_URL
+
+cache:
+  paths:
+    - app/vendor/
+
+before_script:
+  - apt update -y
+  - pecl install xdebug
+  - docker-php-ext-enable xdebug
+  - apt install -y libzip-dev zip
+  - docker-php-ext-install pdo pdo_mysql zip
+  - curl -sS https://getcomposer.org/installer | php
+  - mv composer.phar /usr/local/bin/composer
+
+services:
+  - mysql:latest
+
+stages:
+  - build
+  - linter
+  - test
+
+build:
+  stage: build
+  script:
+    - composer install --prefer-dist --no-ansi --no-interaction --no-progress -d ./app/
+
+#linter:
+#  stage: linter
+#  script:
+#    - ls -la ./app/vendor/bin/
+#    - php memory_limit=-1 ./app/vendor/bin/phpcs app/ -n
+#  dependencies:
+#    - build
+
+unit-test:
+  stage: test
+  script:
+    - php app/bin/phpunit app/tests/Unit/ --coverage-text --colors=never
+    - ls -la
+  dependencies:
+    - build
+
+func-test:
+  stage: test
+  script:
+    - php app/bin/console doctrine:schema:update --force --env=test
+    - php app/bin/console doctrine:fixture:load --no-interaction --env=test
+    - php app/bin/phpunit app/tests/Func/
+    - ls -la
+  dependencies:
+    - build
